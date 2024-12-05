@@ -2,7 +2,7 @@
   <!-- Navbar -->
   <nav class="navbar is-dark" role="navigation" aria-label="main navigation">
     <div class="navbar-brand">
-      <router-link to="/" class="navbar-item has-text-weight-bold">
+      <router-link to="/lineBalancer/" class="navbar-item has-text-weight-bold">
         📊 Line Balancer
       </router-link>
     </div>
