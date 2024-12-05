@@ -1,7 +1,21 @@
 <script lang="ts">
-import { defineComponent, reactive, ref } from "vue";
+import { defineComponent, reactive, ref, computed } from "vue";
 import { Task, Station, calculateCycleTime, balanceLine } from "../utils/lineBalancer";
 import AnimatedSimulation from "./AnimatedSimulation.vue";
+
+const EXAMPLE_TASKS: Task[] = [
+    { name: "A", time: 50, precedence: [] },
+    { name: "B", time: 20, precedence: ["A"] },
+    { name: "C", time: 10, precedence: ["B"] },
+    { name: "D", time: 60, precedence: [] },
+    { name: "E", time: 10, precedence: ["D"] },
+    { name: "F", time: 15, precedence: ["C"] },
+    { name: "G", time: 12, precedence: ["C"] },
+    { name: "H", time: 13, precedence: ["E"] },
+    { name: "I", time: 10, precedence: ["E"] },
+    { name: "J", time: 10, precedence: ["F", "G", "H", "I"] },
+    { name: "K", time: 15, precedence: ["J"] },
+];
 
 export default defineComponent({
     name: "TaskInput",
@@ -9,132 +23,75 @@ export default defineComponent({
         AnimatedSimulation,
     },
     setup() {
-        // Variables reactivas
         const task = reactive<Task>({ name: "", time: 0, precedence: [] });
         const tasks = reactive<Task[]>([]);
         const stations = ref<Station[]>([]);
         const cycleTime = ref<number>(0);
-        // Lista de tareas completadas
         const completedTasks = ref<string[]>([]);
-        const productionGoal = ref<number>(400); // Producción deseada
-        const totalAvailableTime = ref<number>(480 * 60); // 480 minutos en segundos
+        const productionGoal = ref<number>(400);
+        const totalAvailableTime = ref<number>(480 * 60);
+        const triggerAnimation = ref(false);
 
-        // Función para agregar una tarea
+        const minStations = computed(() => {
+            const totalTaskTime = tasks.reduce((sum, task) => sum + task.time, 0);
+            return {
+                unrounded: totalTaskTime / cycleTime.value,
+                rounded: Math.ceil(totalTaskTime / cycleTime.value),
+            };
+        });
+
         const addTask = () => {
-            if (task.name && task.time > 0) {
-                const precedenceArray = task.precedence
-                    ? task.precedence.split(",").map((p) => p.trim())
-                    : []; // Convertir la precedencia a un arreglo
-
-                tasks.push({ ...task, precedence: precedenceArray });
-                task.name = "";
-                task.time = 0;
-                task.precedence = []; // Restablecer precedencia como arreglo vacío
+            if (tasks.some((t) => t.name === task.name)) {
+                alert(`La tarea ${task.name} ya existe.`);
+                return;
             }
+            const precedenceArray = task.precedence
+                ? task.precedence.split(",").map((p) => p.trim())
+                : [];
+            if (!precedenceArray.every((p) => tasks.some((t) => t.name === p))) {
+                alert("Una o más tareas de precedencia no existen.");
+                return;
+            }
+            tasks.push({ ...task, precedence: precedenceArray });
+            task.name = "";
+            task.time = 0;
+            task.precedence = [];
         };
 
-        // Función para cargar el ejemplo
+        const removeTask = (index: number) => {
+            tasks.splice(index, 1);
+        };
+
         const loadExample = () => {
-            const exampleTasks: Task[] = [
-                { name: "A", time: 50, precedence: [] },
-                { name: "B", time: 20, precedence: ["A"] },
-                { name: "C", time: 10, precedence: ["B"] },
-                { name: "D", time: 60, precedence: [] },
-                { name: "E", time: 10, precedence: ["D"] },
-                { name: "F", time: 15, precedence: ["C"] },
-                { name: "G", time: 12, precedence: ["C"] },
-                { name: "H", time: 13, precedence: ["E"] },
-                { name: "I", time: 10, precedence: ["E"] },
-                { name: "J", time: 10, precedence: ["F", "G", "H", "I"] },
-                { name: "K", time: 15, precedence: ["J"] },
-            ];
-
-            tasks.splice(0, tasks.length, ...exampleTasks);
+            tasks.splice(0, tasks.length, ...EXAMPLE_TASKS);
         };
 
-        // Función para calcular las estaciones
         const calculateStations = () => {
             cycleTime.value = calculateCycleTime(totalAvailableTime.value, productionGoal.value);
             stations.value = balanceLine(tasks, cycleTime.value);
+            triggerAnimation.value = true;
+
+            // Reiniciar trigger para permitir nuevas simulaciones
+            setTimeout(() => {
+                triggerAnimation.value = false;
+            }, 100);
         };
 
-        // Función para calcular el número mínimo teórico de estaciones
-        const calculateMinStations = (): { unrounded: number; rounded: number } => {
-            const totalTaskTime = tasks.reduce((sum, task) => sum + task.time, 0); // Tiempo total de las tareas
-            const unrounded = totalTaskTime / cycleTime.value; // Valor sin redondear
-            const rounded = Math.ceil(unrounded); // Valor redondeado hacia arriba
-            return { unrounded, rounded };
+        return {
+            task,
+            tasks,
+            addTask,
+            removeTask, // Aquí estaba el problema: ahora está incluido
+            calculateStations,
+            cycleTime,
+            stations,
+            productionGoal,
+            loadExample,
+            completedTasks,
+            minStations,
+            triggerAnimation
         };
-    
-
-
-    // Función para obtener tareas factibles
-    const getFeasibleTasks = (currentStation: Station, currentTask?: Task): Task[] | string => {
-        if (!currentTask || !currentTask.name) {
-            console.log("Tarea actual no válida o indefinida.");
-            return "-";
-        }
-
-        const findNextLevelNodes = (taskName: string, stationTasks: Task[]): Task[] => {
-            return stationTasks.filter((task) => task.precedence.includes(taskName));
-        };
-
-        const buildDependencyTree = (taskName: string, stationTasks: Task[], visited: Set<string>): Task[] => {
-            const nextLevel = findNextLevelNodes(taskName, stationTasks);
-
-            if (nextLevel.length === 0) return [];
-
-            const feasibleTasks: Task[] = [];
-            for (const task of nextLevel) {
-                if (!visited.has(task.name)) {
-                    visited.add(task.name);
-                    feasibleTasks.push(task);
-                    feasibleTasks.push(...buildDependencyTree(task.name, stationTasks, visited));
-                }
-            }
-            return feasibleTasks;
-        };
-
-        const visited = new Set<string>();
-        const relatedTasks = buildDependencyTree(currentTask.name, currentStation.tasks, visited);
-
-        let accumulatedTime = currentTask.time;
-        const feasibleTasks = relatedTasks.filter((task) => {
-            if (accumulatedTime + task.time <= cycleTime.value) {
-                accumulatedTime += task.time;
-                return true;
-            }
-            return false;
-        });
-
-        console.log(`Tareas factibles para ${currentTask.name}:`, feasibleTasks);
-        return feasibleTasks.length > 0 ? feasibleTasks : "-";
-    };
-
-    const markTaskAsCompleted = (taskName: string) => {
-        if (!completedTasks.value.includes(taskName)) {
-            completedTasks.value.push(taskName);
-            console.log(`Tarea completada: ${taskName}`);
-        }
-    };
-
-
-    return {
-        task,
-        tasks,
-        addTask,
-        calculateStations,
-        calculateMinStations,
-        cycleTime,
-        stations,
-        productionGoal,
-        loadExample,
-        getFeasibleTasks,
-        completedTasks,
-        markTaskAsCompleted,
-        calculateStations
-    };
-},
+    },
 });
 </script>
 
@@ -170,7 +127,6 @@ export default defineComponent({
                         <button class="button is-success is-fullwidth">Agregar Tarea</button>
                     </div>
                 </form>
-                <!-- Botón para cargar el ejemplo -->
                 <div class="field">
                     <button class="button is-warning is-fullwidth" @click="loadExample">Cargar Ejemplo</button>
                 </div>
@@ -185,14 +141,15 @@ export default defineComponent({
                             <th>Tarea</th>
                             <th>Tiempo (s)</th>
                             <th>Precedencia</th>
+                            <th>Acciones</th>
                         </tr>
                     </thead>
                     <tbody>
                         <tr v-for="(task, index) in tasks" :key="index">
                             <td>{{ task.name }}</td>
                             <td>{{ task.time }}</td>
-                            <td>
-                                {{ task.precedence.length > 0 ? task.precedence.join(", ") : "Ninguna" }}
+                            <td>{{ task.precedence.length > 0 ? task.precedence.join(", ") : "Ninguna" }}</td>
+                            <td><button @click="removeTask(index)" class="button is-danger is-small">Eliminar</button>
                             </td>
                         </tr>
                     </tbody>
@@ -200,23 +157,24 @@ export default defineComponent({
             </div>
 
             <!-- Simulación Animada -->
-            <animated-simulation :stations="stations" :cycle-time="cycleTime" />
+            <animated-simulation :stations="stations" :cycle-time="cycleTime" :trigger-animation="triggerAnimation" />
 
             <!-- Tabla de resultados detallados -->
             <div v-if="stations.length > 0" class="box">
                 <h2 class="title is-4 has-text-centered">Resultados del Balanceo</h2>
                 <p><strong>Tiempo de Ciclo Ideal:</strong> {{ cycleTime }} segundos</p>
-                <p><strong>Número Mínimo Teórico de Estaciones:</strong> {{ calculateMinStations() }}</p>
+                <p>
+                    <strong>Número Mínimo Teórico de Estaciones:</strong>
+                    {{ minStations.rounded }} (sin redondear: {{ minStations.unrounded }})
+                </p>
                 <table class="table is-striped is-fullwidth">
                     <thead>
                         <tr>
                             <th>Estación</th>
                             <th>Tarea</th>
                             <th>Tiempo Tarea (s)</th>
-                            <th>Tiempo Restante / No Asignado (s)</th>
+                            <th>Tiempo Restante</th>
                             <th>Tareas Factibles</th>
-                            <th>Tarea con Mayor Tiempo</th>
-                            <th>Selección de la Tarea</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -233,7 +191,6 @@ export default defineComponent({
                                 </ul>
                             </td>
                             <td>
-                                <!-- Mostrar el tiempo restante después de cada tarea -->
                                 <ul>
                                     <li v-for="(task, index) in station.tasks" :key="task.name">
                                         {{ cycleTime - station.tasks.slice(0, index + 1).reduce((sum, t) => sum +
@@ -241,27 +198,23 @@ export default defineComponent({
                                     </li>
                                 </ul>
                             </td>
-
                             <td>
                                 <ul>
                                     <li v-for="task in station.tasks" :key="task.name">
-                                        <span v-if="Array.isArray(getFeasibleTasks(station, task))">
-                                            {{ getFeasibleTasks(station, task).map(t => t.name).join(", ") }}
+                                        <span v-if="task.factibles && task.factibles.length > 0">
+                                            {{ task.factibles.join(", ") }}
                                         </span>
                                         <span v-else>
-                                            {{ getFeasibleTasks(station, task) }}
+                                            -
                                         </span>
                                     </li>
                                 </ul>
                             </td>
-                            <td></td>
-                            <td></td>
                         </tr>
                     </tbody>
                 </table>
             </div>
 
-            <!-- Botón para calcular -->
             <div class="field">
                 <button class="button is-info is-fullwidth" @click="calculateStations">Calcular Balanceo</button>
             </div>

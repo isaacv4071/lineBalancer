@@ -17,33 +17,53 @@ export function calculateCycleTime(totalAvailableTime: number, productionGoal: n
 export function balanceLine(tasks: Task[], cycleTime: number): Station[] {
     const stations: Station[] = [];
     let currentStation: Station = { id: 1, tasks: [], totalTime: 0 };
-
     const remainingTasks = [...tasks];
+    const completedTasks: string[] = []; // Lista de tareas completadas
+    const taskFactibles: Record<string, string[]> = {}; // Diccionario para tareas factibles
 
-    while (remainingTasks.length > 0) {
-        // Ordenar las tareas por tiempo descendente (tiempo más largo primero)
-        remainingTasks.sort((a, b) => b.time - a.time);
+    // Identificar tareas iniciales (sin precedencia) y priorizarlas
+    const initialTasks = remainingTasks.filter((task) => task.precedence.length === 0);
+    const nonInitialTasks = remainingTasks.filter((task) => task.precedence.length > 0);
 
-        let taskAdded = false; // Bandera para verificar si se asignó una tarea
+    // Ordenar iniciales y no iniciales por tiempo descendente
+    initialTasks.sort((a, b) => b.time - a.time);
+    nonInitialTasks.sort((a, b) => b.time - a.time);
 
-        for (let i = 0; i < remainingTasks.length; i++) {
-            const task = remainingTasks[i];
+    // Combinar iniciales primero, seguidas de las no iniciales
+    let taskQueue = [...initialTasks, ...nonInitialTasks];
+
+    while (taskQueue.length > 0) {
+        let taskAdded = false;
+
+        for (let i = 0; i < taskQueue.length; i++) {
+            const task = taskQueue[i];
 
             // Verificar si las dependencias están cumplidas
             const dependenciesMet = task.precedence.every((precedingTaskName) =>
-                currentStation.tasks.some((t) => t.name === precedingTaskName) ||
-                stations.some((station) =>
-                    station.tasks.some((t) => t.name === precedingTaskName)
-                )
+                completedTasks.includes(precedingTaskName)
             );
 
             // Si las dependencias están cumplidas y cabe en la estación actual
             if (dependenciesMet && currentStation.totalTime + task.time <= cycleTime) {
                 currentStation.tasks.push(task);
                 currentStation.totalTime += task.time;
-                remainingTasks.splice(i, 1); // Eliminar la tarea asignada
+
+                // Agregar tarea a completadas
+                completedTasks.push(task.name);
+
+                // Calcular tareas factibles para la tarea actual y almacenarlas
+                const factibleTasks = getFactibleTasks(
+                    task,
+                    taskQueue,
+                    cycleTime,
+                    currentStation.totalTime,
+                    completedTasks
+                );
+                taskFactibles[task.name] = factibleTasks.map((t) => t.name);
+
+                taskQueue.splice(i, 1); // Remover tarea asignada del queue
                 taskAdded = true;
-                break; // Salir del bucle para evaluar nuevas tareas
+                break;
             }
         }
 
@@ -59,5 +79,30 @@ export function balanceLine(tasks: Task[], cycleTime: number): Station[] {
         stations.push(currentStation);
     }
 
+    // Agregar las tareas factibles como propiedad adicional a cada tarea en las estaciones
+    stations.forEach((station) => {
+        station.tasks = station.tasks.map((task) => ({
+            ...task,
+            factibles: taskFactibles[task.name] || [],
+        }));
+    });
+
     return stations;
+}
+
+
+export function getFactibleTasks(
+    task: Task,
+    remainingTasks: Task[],
+    cycleTime: number,
+    currentStationTime: number,
+    completedTasks: string[]
+): Task[] {
+    const result = remainingTasks.filter((t) => {
+        const isNotCurrentTask = t.name !== task.name;
+        const dependenciesMet = t.precedence.every((p) => completedTasks.includes(p));
+        const fitsInCycle = currentStationTime + t.time <= cycleTime;
+        return isNotCurrentTask && dependenciesMet && fitsInCycle;
+    });
+    return result;
 }
