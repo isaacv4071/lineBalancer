@@ -1,6 +1,6 @@
 <script lang="ts">
 import { defineComponent, reactive, ref, computed } from "vue";
-import { Task, Station, calculateCycleTime, balanceLine } from "../utils/lineBalancer";
+import { Task, Station, calculateCycleTime, balanceLine, calculateEfficiency } from "../utils/lineBalancer";
 import AnimatedSimulation from "./AnimatedSimulation.vue";
 
 const EXAMPLE_TASKS: Task[] = [
@@ -28,9 +28,11 @@ export default defineComponent({
         const stations = ref<Station[]>([]);
         const cycleTime = ref<number>(0);
         const completedTasks = ref<string[]>([]);
-        const productionGoal = ref<number>(400);
-        const totalAvailableTime = ref<number>(480 * 60);
+        const productionGoal = ref<number>(0);
+        const totalAvailableTime = ref<number>(0);
         const triggerAnimation = ref(false);
+
+        const totalAvailableTimeInSeconds = computed(() => totalAvailableTime.value * 60);
 
         const minStations = computed(() => {
             const totalTaskTime = tasks.reduce((sum, task) => sum + task.time, 0);
@@ -39,6 +41,12 @@ export default defineComponent({
                 rounded: Math.ceil(totalTaskTime / cycleTime.value),
             };
         });
+
+        const efficiency = computed(() =>
+            stations.value.length > 0 && cycleTime.value > 0
+                ? calculateEfficiency(stations.value, tasks, cycleTime.value)
+                : 0
+        );
 
         const addTask = () => {
             if (tasks.some((t) => t.name === task.name)) {
@@ -64,10 +72,12 @@ export default defineComponent({
 
         const loadExample = () => {
             tasks.splice(0, tasks.length, ...EXAMPLE_TASKS);
+            productionGoal.value = 400; // Valor predeterminado del ejemplo
+            totalAvailableTime.value = 480; // Valor predeterminado del ejemplo en minutos
         };
 
         const calculateStations = () => {
-            cycleTime.value = calculateCycleTime(totalAvailableTime.value, productionGoal.value);
+            cycleTime.value = calculateCycleTime(totalAvailableTimeInSeconds.value, productionGoal.value);
             stations.value = balanceLine(tasks, cycleTime.value);
             triggerAnimation.value = true;
 
@@ -76,6 +86,17 @@ export default defineComponent({
                 triggerAnimation.value = false;
             }, 100);
         };
+
+        const efficiencyMessage = computed(() => {
+            if (efficiency.value < 60) {
+                return "Insatisfactoria";
+            } else if (efficiency.value >= 60 && efficiency.value <= 90) {
+                return "Satisfactoria";
+            } else {
+                return "Sobresaliente";
+            }
+        });
+
 
         return {
             task,
@@ -89,7 +110,10 @@ export default defineComponent({
             loadExample,
             completedTasks,
             minStations,
-            triggerAnimation
+            efficiency,
+            triggerAnimation,
+            efficiencyMessage,
+            totalAvailableTime
         };
     },
 });
@@ -99,38 +123,71 @@ export default defineComponent({
     <section class="section">
         <div class="container">
             <!-- Formulario para agregar tareas -->
-            <div class="box">
-                <h2 class="title is-4 has-text-centered">Agregar Tarea</h2>
-                <form @submit.prevent="addTask">
-                    <div class="field">
-                        <label class="label">Nombre de la Tarea</label>
-                        <div class="control">
-                            <input class="input is-primary" type="text" v-model="task.name" placeholder="Ej. A"
-                                required />
+            <div class="columns">
+                <!-- Columna para agregar tarea -->
+                <div class="column">
+                    <div class="box">
+                        <h2 class="title is-4 has-text-centered">Agregar Tarea</h2>
+                        <form @submit.prevent="addTask">
+                            <div class="field">
+                                <label class="label">Nombre de la Tarea</label>
+                                <div class="control">
+                                    <input class="input is-primary" type="text" v-model="task.name" placeholder="Ej. A"
+                                        required />
+                                </div>
+                            </div>
+                            <div class="field">
+                                <label class="label">Tiempo (segundos)</label>
+                                <div class="control">
+                                    <input class="input is-primary" type="number" v-model.number="task.time"
+                                        placeholder="Ej. 50" min="1" required />
+                                </div>
+                            </div>
+                            <div class="field">
+                                <label class="label">Precedencia</label>
+                                <div class="control">
+                                    <input class="input is-primary" type="text" v-model="task.precedence"
+                                        placeholder="Ej. B, C" />
+                                </div>
+                            </div>
+                            <div class="field">
+                                <button class="button is-success is-fullwidth">Agregar Tarea</button>
+                            </div>
+                        </form>
+                        <div class="field mt-3">
+                            <button class="button is-warning is-fullwidth" @click="loadExample">Cargar Ejemplo</button>
                         </div>
                     </div>
-                    <div class="field">
-                        <label class="label">Tiempo (segundos)</label>
-                        <div class="control">
-                            <input class="input is-primary" type="number" v-model.number="task.time"
-                                placeholder="Ej. 50" min="1" required />
-                        </div>
+                </div>
+
+                <!-- Columna para configuración -->
+                <div class="column">
+                    <div class="box">
+                        <h2 class="title is-4 has-text-centered">Configuración</h2>
+                        <form @submit.prevent="calculateStations">
+                            <div class="field">
+                                <label class="label">Meta de Producción</label>
+                                <div class="control">
+                                    <input class="input is-primary" type="number" v-model.number="productionGoal"
+                                        min="1" />
+                                </div>
+                            </div>
+                            <div class="field">
+                                <label class="label">Tiempo Total Disponible (minutos)</label>
+                                <div class="control">
+                                    <input class="input is-primary" type="number"
+                                        v-model.number="totalAvailableTimeInMinutes" min="1" />
+                                </div>
+                            </div>
+                            <div class="field">
+                                <button class="button is-success is-fullwidth">Actualizar Configuración</button>
+                            </div>
+                        </form>
                     </div>
-                    <div class="field">
-                        <label class="label">Precedencia</label>
-                        <div class="control">
-                            <input class="input is-primary" type="text" v-model="task.precedence"
-                                placeholder="Ej. B, C" />
-                        </div>
-                    </div>
-                    <div class="field">
-                        <button class="button is-success is-fullwidth">Agregar Tarea</button>
-                    </div>
-                </form>
-                <div class="field">
-                    <button class="button is-warning is-fullwidth" @click="loadExample">Cargar Ejemplo</button>
                 </div>
             </div>
+
+
 
             <!-- Tabla de tareas -->
             <div v-if="tasks.length > 0" class="box">
@@ -166,6 +223,17 @@ export default defineComponent({
                 <p>
                     <strong>Número Mínimo Teórico de Estaciones:</strong>
                     {{ minStations.rounded }} (sin redondear: {{ minStations.unrounded }})
+                </p>
+                <p><strong>Eficiencia:</strong> {{ efficiency.toFixed(2) }}%</p>
+                <p>
+                    <strong>Evaluación: </strong>
+                    <span :class="{
+                        'has-text-danger': efficiencyMessage === 'Insatisfactoria',
+                        'has-text-warning': efficiencyMessage === 'Satisfactoria',
+                        'has-text-success': efficiencyMessage === 'Sobresaliente',
+                    }">
+                        {{ efficiencyMessage }}
+                    </span>
                 </p>
                 <table class="table is-striped is-fullwidth">
                     <thead>

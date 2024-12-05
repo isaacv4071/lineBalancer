@@ -102,8 +102,6 @@ export function balanceLine(tasks: Task[], cycleTime: number): Station[] {
     return stations;
 }
 
-
-
 export function getFactibleTasks(
     task: Task,
     remainingTasks: Task[],
@@ -118,4 +116,10 @@ export function getFactibleTasks(
         return isNotCurrentTask && dependenciesMet && fitsInCycle;
     });
     return result;
+}
+
+export function calculateEfficiency(stations: Station[], tasks: Task[], cycleTime: number): number {
+    const totalTaskTime = tasks.reduce((sum, task) => sum + task.time, 0);
+    const numberOfStations = stations.length;
+    return (totalTaskTime / (numberOfStations * cycleTime)) * 100;
 }
