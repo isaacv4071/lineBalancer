@@ -2,6 +2,7 @@
 import { defineComponent, reactive, ref, computed } from "vue";
 import { Task, Station, calculateCycleTime, balanceLine, calculateEfficiency } from "../utils/lineBalancer";
 import AnimatedSimulation from "./AnimatedSimulation.vue";
+import TaskChart from "./TaskChart.vue";
 
 const EXAMPLE_TASKS: Task[] = [
     { name: "A", time: 50, precedence: [] },
@@ -21,6 +22,7 @@ export default defineComponent({
     name: "TaskInput",
     components: {
         AnimatedSimulation,
+        TaskChart
     },
     setup() {
         const task = reactive<Task>({ name: "", time: 0, precedence: [] });
@@ -31,6 +33,7 @@ export default defineComponent({
         const productionGoal = ref<number>(0);
         const totalAvailableTime = ref<number>(0);
         const triggerAnimation = ref(false);
+        const showChart = ref(false);
 
         const totalAvailableTimeInSeconds = computed(() => totalAvailableTime.value * 60);
 
@@ -53,18 +56,26 @@ export default defineComponent({
                 alert(`La tarea ${task.name} ya existe.`);
                 return;
             }
-            const precedenceArray = task.precedence
-                ? task.precedence.split(",").map((p) => p.trim())
-                : [];
+
+            // Verificar si `task.precedence` es una cadena y convertirla a un arreglo
+            const precedenceArray = Array.isArray(task.precedence)
+                ? task.precedence
+                : task.precedence
+                    ? task.precedence.split(",").map((p) => p.trim())
+                    : [];
+
+            // Validar si las precedencias existen en la lista de tareas
             if (!precedenceArray.every((p) => tasks.some((t) => t.name === p))) {
                 alert("Una o más tareas de precedencia no existen.");
                 return;
             }
+
             tasks.push({ ...task, precedence: precedenceArray });
             task.name = "";
             task.time = 0;
             task.precedence = [];
         };
+
 
         const removeTask = (index: number) => {
             tasks.splice(index, 1);
@@ -80,6 +91,10 @@ export default defineComponent({
             cycleTime.value = calculateCycleTime(totalAvailableTimeInSeconds.value, productionGoal.value);
             stations.value = balanceLine(tasks, cycleTime.value);
             triggerAnimation.value = true;
+
+            if (stations.value.length > 0) {
+                showChart.value = true;
+            }
 
             // Reiniciar trigger para permitir nuevas simulaciones
             setTimeout(() => {
@@ -113,7 +128,8 @@ export default defineComponent({
             efficiency,
             triggerAnimation,
             efficiencyMessage,
-            totalAvailableTime
+            totalAvailableTime,
+            showChart
         };
     },
 });
@@ -175,8 +191,8 @@ export default defineComponent({
                             <div class="field">
                                 <label class="label">Tiempo Total Disponible (minutos)</label>
                                 <div class="control">
-                                    <input class="input is-primary" type="number"
-                                        v-model.number="totalAvailableTimeInMinutes" min="1" />
+                                    <input class="input is-primary" type="number" v-model.number="totalAvailableTime"
+                                        min="1" />
                                 </div>
                             </div>
                             <div class="field">
@@ -215,6 +231,8 @@ export default defineComponent({
 
             <!-- Simulación Animada -->
             <animated-simulation :stations="stations" :cycle-time="cycleTime" :trigger-animation="triggerAnimation" />
+
+            <task-chart v-if="tasks && tasks.length > 0 && showChart" :tasks="tasks" />
 
             <!-- Tabla de resultados detallados -->
             <div v-if="stations.length > 0" class="box">
@@ -304,7 +322,7 @@ export default defineComponent({
                 </table>
             </div>
 
-            <div class="field">
+            <div class="field mt-5">
                 <button class="button is-info is-fullwidth" @click="calculateStations">Calcular Balanceo</button>
             </div>
         </div>
