@@ -3,8 +3,8 @@ import Home from "../views/Home.vue";
 import TaskInput from "../components/TaskInput.vue";
 
 const routes = [
-  { path: "/", name: "Home", component: Home },
-  { path: "/tasks", name: "Tasks", component: TaskInput },
+  { path: "/lineBalancer/", name: "Home", component: Home },
+  { path: "/lineBalancer/tasks", name: "Tasks", component: TaskInput },
 ];
 
 const router = createRouter({

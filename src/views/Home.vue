@@ -6,7 +6,7 @@
           <p class="subtitle is-4 has-text-light">
             Optimiza líneas de ensamble con balanceo de tareas eficiente.
           </p>
-          <router-link to="/tasks" class="button is-info is-large">
+          <router-link to="/lineBalancer/tasks" class="button is-info is-large">
             Comenzar
           </router-link>
         </div>
