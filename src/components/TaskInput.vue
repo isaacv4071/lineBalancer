@@ -175,6 +175,7 @@ export default defineComponent({
                             <th>Tiempo Tarea (s)</th>
                             <th>Tiempo Restante</th>
                             <th>Tareas Factibles</th>
+                            <th>Tarea con Mayor Tiempo</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -203,6 +204,18 @@ export default defineComponent({
                                     <li v-for="task in station.tasks" :key="task.name">
                                         <span v-if="task.factibles && task.factibles.length > 0">
                                             {{ task.factibles.join(", ") }}
+                                        </span>
+                                        <span v-else>
+                                            -
+                                        </span>
+                                    </li>
+                                </ul>
+                            </td>
+                            <td> <!-- Nueva columna -->
+                                <ul>
+                                    <li v-for="task in station.tasks" :key="task.name">
+                                        <span v-if="task.maxTimeTasks && task.maxTimeTasks.length > 0">
+                                            {{ task.maxTimeTasks.join(", ") }}
                                         </span>
                                         <span v-else>
                                             -

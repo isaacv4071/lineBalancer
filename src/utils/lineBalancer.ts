@@ -20,16 +20,15 @@ export function balanceLine(tasks: Task[], cycleTime: number): Station[] {
     const remainingTasks = [...tasks];
     const completedTasks: string[] = []; // Lista de tareas completadas
     const taskFactibles: Record<string, string[]> = {}; // Diccionario para tareas factibles
+    const maxTimeTasks: Record<string, string[]> = {}; // Diccionario para tareas con mayor tiempo
 
     // Identificar tareas iniciales (sin precedencia) y priorizarlas
     const initialTasks = remainingTasks.filter((task) => task.precedence.length === 0);
     const nonInitialTasks = remainingTasks.filter((task) => task.precedence.length > 0);
 
-    // Ordenar iniciales y no iniciales por tiempo descendente
     initialTasks.sort((a, b) => b.time - a.time);
     nonInitialTasks.sort((a, b) => b.time - a.time);
 
-    // Combinar iniciales primero, seguidas de las no iniciales
     let taskQueue = [...initialTasks, ...nonInitialTasks];
 
     while (taskQueue.length > 0) {
@@ -38,20 +37,16 @@ export function balanceLine(tasks: Task[], cycleTime: number): Station[] {
         for (let i = 0; i < taskQueue.length; i++) {
             const task = taskQueue[i];
 
-            // Verificar si las dependencias están cumplidas
             const dependenciesMet = task.precedence.every((precedingTaskName) =>
                 completedTasks.includes(precedingTaskName)
             );
 
-            // Si las dependencias están cumplidas y cabe en la estación actual
             if (dependenciesMet && currentStation.totalTime + task.time <= cycleTime) {
                 currentStation.tasks.push(task);
                 currentStation.totalTime += task.time;
 
-                // Agregar tarea a completadas
                 completedTasks.push(task.name);
 
-                // Calcular tareas factibles para la tarea actual y almacenarlas
                 const factibleTasks = getFactibleTasks(
                     task,
                     taskQueue,
@@ -59,36 +54,43 @@ export function balanceLine(tasks: Task[], cycleTime: number): Station[] {
                     currentStation.totalTime,
                     completedTasks
                 );
+
                 taskFactibles[task.name] = factibleTasks.map((t) => t.name);
 
-                taskQueue.splice(i, 1); // Remover tarea asignada del queue
+                // Identificar tareas con mayor tiempo
+                const maxTime = Math.max(...factibleTasks.map((t) => t.time), 0);
+                maxTimeTasks[task.name] = factibleTasks
+                    .filter((t) => t.time === maxTime)
+                    .map((t) => t.name);
+
+                taskQueue.splice(i, 1);
                 taskAdded = true;
                 break;
             }
         }
 
-        // Si no se pudo agregar ninguna tarea, cerrar la estación actual
         if (!taskAdded) {
             stations.push(currentStation);
             currentStation = { id: stations.length + 1, tasks: [], totalTime: 0 };
         }
     }
 
-    // Agregar la última estación si tiene tareas
     if (currentStation.tasks.length > 0) {
         stations.push(currentStation);
     }
 
-    // Agregar las tareas factibles como propiedad adicional a cada tarea en las estaciones
+    // Agregar factibles y tareas con mayor tiempo como propiedades adicionales
     stations.forEach((station) => {
         station.tasks = station.tasks.map((task) => ({
             ...task,
             factibles: taskFactibles[task.name] || [],
+            maxTimeTasks: maxTimeTasks[task.name] || [],
         }));
     });
 
     return stations;
 }
+
 
 
 export function getFactibleTasks(
