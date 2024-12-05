@@ -21,6 +21,7 @@ export function balanceLine(tasks: Task[], cycleTime: number): Station[] {
     const completedTasks: string[] = []; // Lista de tareas completadas
     const taskFactibles: Record<string, string[]> = {}; // Diccionario para tareas factibles
     const maxTimeTasks: Record<string, string[]> = {}; // Diccionario para tareas con mayor tiempo
+    const taskSelections: Record<string, string | null> = {}; // Diccionario para tarea seleccionada
 
     // Identificar tareas iniciales (sin precedencia) y priorizarlas
     const initialTasks = remainingTasks.filter((task) => task.precedence.length === 0);
@@ -63,6 +64,15 @@ export function balanceLine(tasks: Task[], cycleTime: number): Station[] {
                     .filter((t) => t.time === maxTime)
                     .map((t) => t.name);
 
+                const selectedTask =
+                    factibleTasks.length > 0
+                        ? factibleTasks.reduce((max, t) =>
+                            t.time > max.time ? t : max
+                        ).name
+                        : null;
+
+                taskSelections[task.name] = selectedTask;
+
                 taskQueue.splice(i, 1);
                 taskAdded = true;
                 break;
@@ -85,6 +95,7 @@ export function balanceLine(tasks: Task[], cycleTime: number): Station[] {
             ...task,
             factibles: taskFactibles[task.name] || [],
             maxTimeTasks: maxTimeTasks[task.name] || [],
+            selectedTask: taskSelections[task.name] || "-",
         }));
     });
 

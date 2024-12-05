@@ -176,6 +176,7 @@ export default defineComponent({
                             <th>Tiempo Restante</th>
                             <th>Tareas Factibles</th>
                             <th>Tarea con Mayor Tiempo</th>
+                            <th>Selección</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -220,6 +221,13 @@ export default defineComponent({
                                         <span v-else>
                                             -
                                         </span>
+                                    </li>
+                                </ul>
+                            </td>
+                            <td> <!-- Nueva columna -->
+                                <ul>
+                                    <li v-for="task in station.tasks" :key="task.name">
+                                        {{ task.selectedTask }}
                                     </li>
                                 </ul>
                             </td>
